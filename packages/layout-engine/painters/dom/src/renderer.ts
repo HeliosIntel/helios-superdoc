@@ -3033,10 +3033,51 @@ export class DomPainter {
       applyImageClipPath(img, imageClipPath, { clipContainer: fragmentEl });
       img.style.display = block.display === 'inline' ? 'inline-block' : 'block';
 
+      // Apply rotation and flip transforms from OOXML a:xfrm
+      const transforms: string[] = [];
+
+      // Calculate translation offset to keep top-left corner fixed when rotating
+      if (block.rotation != null && block.rotation !== 0) {
+        const angleRad = (block.rotation * Math.PI) / 180;
+        const w = block.width ?? fragment.width;
+        const h = block.height ?? fragment.height;
+
+        // Calculate how much the top-left corner moves when rotating around center
+        // Top-left corner starts at (0, 0) in element space
+        // Center is at (w/2, h/2)
+        // After rotation, we need to translate to keep top-left at (0, 0)
+        const cosA = Math.cos(angleRad);
+        const sinA = Math.sin(angleRad);
+
+        // Position of top-left corner after rotation (relative to original top-left)
+        const newTopLeftX = (w / 2) * (1 - cosA) + (h / 2) * sinA;
+        const newTopLeftY = (w / 2) * sinA + (h / 2) * (1 - cosA);
+
+        transforms.push(`translate(${-newTopLeftX}px, ${-newTopLeftY}px)`);
+        transforms.push(`rotate(${block.rotation}deg)`);
+      }
+      if (block.flipH) {
+        transforms.push('scaleX(-1)');
+      }
+      if (block.flipV) {
+        transforms.push('scaleY(-1)');
+      }
+
+      if (transforms.length > 0) {
+        img.style.transform = transforms.join(' ');
+        img.style.transformOrigin = 'center';
+      }
+
       // Apply VML image adjustments (gain/blacklevel) as CSS filters for watermark effects
       // conversion formulas calculated based on Libreoffice vml reader
       // https://github.com/LibreOffice/core/blob/951a74d047cfddff78014225f55ecb2bbdcd9c4c/oox/source/vml/vmlshapecontext.cxx#L465C13-L493C1
       const filters: string[] = [];
+
+      // Apply OOXML grayscale effect
+      if (block.grayscale) {
+        filters.push('grayscale(100%)');
+      }
+
       if (block.gain != null || block.blacklevel != null) {
         // Convert VML gain to CSS contrast
         // VML gain is a hex string like "19661f" - higher = more contrast
@@ -3055,10 +3096,10 @@ export class DomPainter {
             filters.push(`brightness(${brightness})`);
           }
         }
+      }
 
-        if (filters.length > 0) {
-          img.style.filter = filters.join(' ');
-        }
+      if (filters.length > 0) {
+        img.style.filter = filters.join(' ');
       }
       fragmentEl.appendChild(img);
 
@@ -4413,6 +4454,70 @@ export class DomPainter {
       // Position and z-index on the image only (not the line) so resize overlay can stack above.
       img.style.position = 'relative';
       img.style.zIndex = '1';
+    }
+
+    // Apply rotation and flip transforms from OOXML a:xfrm
+    const transforms: string[] = [];
+
+    // Calculate translation offset to keep top-left corner fixed when rotating
+    if (run.rotation != null && run.rotation !== 0) {
+      const angleRad = (run.rotation * Math.PI) / 180;
+      const w = run.width;
+      const h = run.height;
+
+      // Calculate how much the top-left corner moves when rotating around center
+      // Top-left corner starts at (0, 0) in element space
+      // Center is at (w/2, h/2)
+      // After rotation, we need to translate to keep top-left at (0, 0)
+      const cosA = Math.cos(angleRad);
+      const sinA = Math.sin(angleRad);
+
+      // Position of top-left corner after rotation (relative to original top-left)
+      const newTopLeftX = (w / 2) * (1 - cosA) + (h / 2) * sinA;
+      const newTopLeftY = (w / 2) * sinA + (h / 2) * (1 - cosA);
+
+      transforms.push(`translate(${-newTopLeftX}px, ${-newTopLeftY}px)`);
+      transforms.push(`rotate(${run.rotation}deg)`);
+    }
+    if (run.flipH) {
+      transforms.push('scaleX(-1)');
+    }
+    if (run.flipV) {
+      transforms.push('scaleY(-1)');
+    }
+    if (transforms.length > 0) {
+      img.style.transform = transforms.join(' ');
+      img.style.transformOrigin = 'center';
+    }
+
+    // Apply image effects (grayscale, VML adjustments for watermarks)
+    const filters: string[] = [];
+
+    // Apply OOXML grayscale effect
+    if (run.grayscale) {
+      filters.push('grayscale(100%)');
+    }
+
+    if (run.gain != null || run.blacklevel != null) {
+      // Convert VML gain to CSS contrast
+      if (run.gain && typeof run.gain === 'string' && run.gain.endsWith('f')) {
+        const contrast = Math.max(0, parseInt(run.gain) / 65536) * (2 / 3);
+        if (contrast > 0) {
+          filters.push(`contrast(${contrast})`);
+        }
+      }
+
+      // Convert VML blacklevel to CSS brightness
+      if (run.blacklevel && typeof run.blacklevel === 'string' && run.blacklevel.endsWith('f')) {
+        const brightness = Math.max(0, 1 + parseInt(run.blacklevel) / 327 / 100) * 1.3;
+        if (brightness > 0) {
+          filters.push(`brightness(${brightness})`);
+        }
+      }
+    }
+
+    if (filters.length > 0) {
+      img.style.filter = filters.join(' ');
     }
 
     // Assert PM positions are present for cursor fallback
