@@ -2669,6 +2669,38 @@ export function tablesSetShadingAdapter(
     currentProps.shading = { fill: input.color, val: 'clear', color: 'auto' };
     const syncAttrs = resolved.scope === 'table' ? syncExtractedTableAttrs(currentProps) : {};
     tr.setNodeMarkup(resolved.pos, null, { ...currentAttrs, [propsKey]: currentProps, ...syncAttrs });
+
+    if (resolved.scope === 'table') {
+      const tableNode = resolved.node;
+      const tableStart = resolved.pos + 1;
+      const map = TableMap.get(tableNode);
+      const seen = new Set<number>();
+      const mapFrom = tr.mapping.maps.length;
+
+      for (let i = 0; i < map.map.length; i++) {
+        const relPos = map.map[i]!;
+        if (seen.has(relPos)) continue;
+        seen.add(relPos);
+
+        const cellNode = tableNode.nodeAt(relPos);
+        if (!cellNode) continue;
+
+        const cellAttrs = cellNode.attrs as Record<string, unknown>;
+        const cellProps = { ...((cellAttrs.tableCellProperties ?? {}) as Record<string, unknown>) };
+        cellProps.shading = { fill: input.color, val: 'clear', color: 'auto' };
+
+        const nextCellAttrs: Record<string, unknown> = {
+          ...cellAttrs,
+          tableCellProperties: cellProps,
+        };
+
+        if (input.color === 'auto') delete nextCellAttrs.background;
+        else nextCellAttrs.background = { color: input.color };
+
+        tr.setNodeMarkup(tr.mapping.slice(mapFrom).map(tableStart + relPos), null, nextCellAttrs);
+      }
+    }
+
     applyDirectMutationMeta(tr);
     editor.dispatch(tr);
     clearIndexCache(editor);
