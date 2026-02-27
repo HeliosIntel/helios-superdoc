@@ -43,6 +43,7 @@ import type {
   TableAttrs,
   TableCellAttrs,
   PositionMapping,
+  CustomGeometryData,
 } from '@superdoc/contracts';
 import { calculateJustifySpacing, computeLinePmRange, shouldApplyJustify, SPACE_CHARS } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
@@ -3228,9 +3229,15 @@ export class DomPainter {
     contentContainer.style.width = `${innerWidth}px`;
     contentContainer.style.height = `${innerHeight}px`;
 
-    const svgMarkup = block.shapeKind ? this.tryCreatePresetSvg(block, innerWidth, innerHeight) : null;
-    if (svgMarkup) {
-      const svgElement = this.parseSafeSvg(svgMarkup);
+    // Custom geometry takes priority — shapeKind may carry a schema default ('rect')
+    // even when the source shape only had a:custGeom and no a:prstGeom.
+    const customGeomSvg = block.customGeometry ? this.tryCreateCustomGeometrySvg(block, innerWidth, innerHeight) : null;
+    const svgMarkup =
+      !customGeomSvg && block.shapeKind ? this.tryCreatePresetSvg(block, innerWidth, innerHeight) : null;
+    const resolvedSvgMarkup = customGeomSvg || svgMarkup;
+
+    if (resolvedSvgMarkup) {
+      const svgElement = this.parseSafeSvg(resolvedSvgMarkup);
       if (svgElement) {
         svgElement.setAttribute('width', '100%');
         svgElement.setAttribute('height', '100%');
@@ -3385,17 +3392,6 @@ export class DomPainter {
     textDiv.style.fontSize = '12px';
     textDiv.style.lineHeight = '1.2';
 
-    // Apply counter-scaling to prevent text from being stretched by parent group transform
-    if (groupScaleX !== 1 || groupScaleY !== 1) {
-      const counterScaleX = 1 / groupScaleX;
-      const counterScaleY = 1 / groupScaleY;
-      textDiv.style.transform = `scale(${counterScaleX}, ${counterScaleY})`;
-      textDiv.style.transformOrigin = 'top left';
-      // Adjust dimensions to compensate for counter-scaling
-      textDiv.style.width = `${100 * groupScaleX}%`;
-      textDiv.style.height = `${100 * groupScaleY}%`;
-    }
-
     // Horizontal text alignment uses CSS text-align property
     // Note: justifyContent is already set above for vertical alignment
     if (textAlign === 'center') {
@@ -3519,6 +3515,67 @@ export class DomPainter {
       console.warn(`[DomPainter] Unable to render preset shape "${block.shapeKind}":`, error);
       return null;
     }
+  }
+
+  /**
+   * Creates an SVG string from custom geometry path data (a:custGeom).
+   * Each path in the custom geometry has its own coordinate space (w × h) which is
+   * mapped to the shape's actual dimensions via the SVG viewBox.
+   */
+  private tryCreateCustomGeometrySvg(block: VectorShapeDrawing, width: number, height: number): string | null {
+    const custGeom = block.customGeometry;
+    if (!custGeom?.paths?.length) return null;
+
+    let fillColor: string;
+    if (block.fillColor === null) {
+      fillColor = 'none';
+    } else if (typeof block.fillColor === 'string') {
+      fillColor = block.fillColor;
+    } else {
+      // Gradient / solidWithAlpha: use a placeholder fill so that downstream
+      // applyGradientToSVG / applyAlphaToSVG (which skip fill="none") can
+      // target these elements and replace the fill.
+      fillColor = '#000000';
+    }
+    const strokeColor =
+      block.strokeColor === null ? 'none' : typeof block.strokeColor === 'string' ? block.strokeColor : 'none';
+    const strokeWidth = block.strokeColor === null ? 0 : (block.strokeWidth ?? 0);
+
+    // Build SVG paths. Each path has its own coordinate space (w × h).
+    // Use the first path's coordinate space for the viewBox, and scale subsequent paths if needed.
+    const firstPath = custGeom.paths[0];
+    const viewW = firstPath.w || width;
+    const viewH = firstPath.h || height;
+
+    // Degenerate: zero-dimension viewBox is invalid SVG — skip rendering.
+    if (viewW === 0 || viewH === 0) return null;
+
+    // When the SVG viewBox maps to a non-uniform aspect ratio (common with group transforms),
+    // thin fill borders can become sub-pixel on one axis. Add a hairline stroke matching the
+    // fill color with vector-effect="non-scaling-stroke" so edges remain at least 0.5px visible.
+    const needsEdgeStroke = fillColor !== 'none' && strokeColor === 'none';
+    const edgeStroke = needsEdgeStroke
+      ? ` stroke="${fillColor}" stroke-width="0.5" vector-effect="non-scaling-stroke"`
+      : '';
+
+    const pathElements = custGeom.paths
+      .map((p) => {
+        // If this path has a different coordinate space, apply a transform to map it
+        const pathW = p.w || viewW;
+        const pathH = p.h || viewH;
+        const needsTransform = pathW !== viewW || pathH !== viewH;
+        const scaleX = viewW / pathW;
+        const scaleY = viewH / pathH;
+        const transform = needsTransform ? ` transform="scale(${scaleX}, ${scaleY})"` : '';
+        const strokeAttr =
+          strokeColor !== 'none' ? ` stroke="${strokeColor}" stroke-width="${strokeWidth}"` : edgeStroke;
+        return `<path d="${p.d}" fill="${fillColor}" fill-rule="evenodd"${strokeAttr}${transform} />`;
+      })
+      .join('\n  ');
+
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${viewW} ${viewH}" preserveAspectRatio="none">
+  ${pathElements}
+</svg>`;
   }
 
   private parseSafeSvg(markup: string): SVGElement | null {
@@ -3735,46 +3792,38 @@ export class DomPainter {
     const groupTransform = block.groupTransform;
     let contentContainer: HTMLElement = groupEl;
 
-    // Calculate scale factors for counter-scaling text
-    const groupScaleX = 1;
-    const groupScaleY = 1;
+    const visibleWidth = groupTransform?.width ?? block.geometry.width ?? 0;
+    const visibleHeight = groupTransform?.height ?? block.geometry.height ?? 0;
 
     if (groupTransform) {
       const inner = this.doc!.createElement('div');
       inner.style.position = 'absolute';
       inner.style.left = '0';
       inner.style.top = '0';
-      const childWidth = groupTransform.childWidth ?? groupTransform.width ?? block.geometry.width ?? 0;
-      const childHeight = groupTransform.childHeight ?? groupTransform.height ?? block.geometry.height ?? 0;
-      inner.style.width = `${Math.max(1, childWidth)}px`;
-      inner.style.height = `${Math.max(1, childHeight)}px`;
-      const transforms: string[] = [];
-      const offsetX = groupTransform.childX ?? 0;
-      const offsetY = groupTransform.childY ?? 0;
-      if (offsetX || offsetY) {
-        transforms.push(`translate(${-offsetX}px, ${-offsetY}px)`);
-      }
-      if (transforms.length > 0) {
-        inner.style.transformOrigin = 'top left';
-        inner.style.transform = transforms.join(' ');
-      }
+      // Container at visible dimensions. Children use pre-scaled positions/sizes.
+      inner.style.width = `${Math.max(1, visibleWidth)}px`;
+      inner.style.height = `${Math.max(1, visibleHeight)}px`;
       groupEl.appendChild(inner);
       contentContainer = inner;
     }
 
     block.shapes.forEach((child) => {
-      const childContent = this.createGroupChildContent(child, groupScaleX, groupScaleY, context);
+      const childContent = this.createGroupChildContent(child, 1, 1, context);
       if (!childContent) return;
       const attrs = (child as ShapeGroupChild).attrs ?? {};
       const wrapper = this.doc!.createElement('div');
       wrapper.classList.add('superdoc-shape-group__child');
       wrapper.style.position = 'absolute';
-      wrapper.style.left = `${attrs.x ?? 0}px`;
-      wrapper.style.top = `${attrs.y ?? 0}px`;
-      const childWidthValue = typeof attrs.width === 'number' ? attrs.width : block.geometry.width;
-      const childHeightValue = typeof attrs.height === 'number' ? attrs.height : block.geometry.height;
-      wrapper.style.width = `${Math.max(1, childWidthValue)}px`;
-      wrapper.style.height = `${Math.max(1, childHeightValue)}px`;
+
+      // Children use pre-scaled (visual-space) positions/sizes from import.
+      wrapper.style.left = `${Number(attrs.x ?? 0)}px`;
+      wrapper.style.top = `${Number(attrs.y ?? 0)}px`;
+
+      const childW = typeof attrs.width === 'number' ? attrs.width : block.geometry.width;
+      const childH = typeof attrs.height === 'number' ? attrs.height : block.geometry.height;
+      wrapper.style.width = `${Math.max(1, childW)}px`;
+      wrapper.style.height = `${Math.max(1, childH)}px`;
+
       wrapper.style.transformOrigin = 'center';
       const transforms: string[] = [];
       if (attrs.rotation) {
@@ -3810,6 +3859,7 @@ export class DomPainter {
       const attrs = child.attrs as PositionedDrawingGeometry &
         VectorShapeStyle & {
           kind?: string;
+          customGeometry?: CustomGeometryData;
           shapeId?: string;
           shapeName?: string;
           textContent?: ShapeTextContent;
@@ -3836,6 +3886,7 @@ export class DomPainter {
         drawingContentId: undefined,
         drawingContent: undefined,
         shapeKind: attrs.kind,
+        customGeometry: attrs.customGeometry,
         fillColor: attrs.fillColor,
         strokeColor: attrs.strokeColor,
         strokeWidth: attrs.strokeWidth,
