@@ -1189,6 +1189,7 @@ const STUB_TABLE_OPS: ReadonlySet<OperationId> = new Set([] as OperationId[]);
  * pattern. mutations.apply returns PlanReceipt (always success: true) or throws.
  */
 const PLAN_ENGINE_META_OPS: ReadonlySet<OperationId> = new Set(['mutations.apply'] as OperationId[]);
+const NON_RECEIPT_MUTATION_OPS: ReadonlySet<OperationId> = new Set(['history.undo', 'history.redo'] as OperationId[]);
 const HAS_STRUCTURED_FAILURE_RESULT = (operationId: OperationId): boolean =>
   COMMAND_CATALOG[operationId].possibleFailureCodes.length > 0;
 
@@ -4351,9 +4352,11 @@ describe('document-api adapter conformance', () => {
 
       if (!COMMAND_CATALOG[operationId].mutates) continue;
       expect(COMMAND_CATALOG[operationId].throws.postApplyForbidden).toBe(true);
-      expect(schema.success).toBeDefined();
+      if (!NON_RECEIPT_MUTATION_OPS.has(operationId)) {
+        expect(schema.success).toBeDefined();
+      }
       // Plan-engine meta-ops (mutations.apply) return PlanReceipt (always success) or throw — no failure schema.
-      if (!PLAN_ENGINE_META_OPS.has(operationId)) {
+      if (!PLAN_ENGINE_META_OPS.has(operationId) && !NON_RECEIPT_MUTATION_OPS.has(operationId)) {
         expect(schema.failure).toBeDefined();
       }
     }
@@ -4362,7 +4365,7 @@ describe('document-api adapter conformance', () => {
   it('covers every implemented mutating operation with throw/failure/apply vectors', () => {
     const vectorKeys = Object.keys(mutationVectors).sort();
     const expectedKeys = [...MUTATING_OPERATION_IDS]
-      .filter((id) => !STUB_TABLE_OPS.has(id) && !PLAN_ENGINE_META_OPS.has(id))
+      .filter((id) => !STUB_TABLE_OPS.has(id) && !PLAN_ENGINE_META_OPS.has(id) && !NON_RECEIPT_MUTATION_OPS.has(id))
       .sort();
     expect(vectorKeys).toEqual(expectedKeys);
 
@@ -4396,7 +4399,7 @@ describe('document-api adapter conformance', () => {
 
   it('enforces pre-apply throw behavior for every mutating operation', () => {
     const implementedMutatingOps = MUTATING_OPERATION_IDS.filter(
-      (id) => !STUB_TABLE_OPS.has(id) && !PLAN_ENGINE_META_OPS.has(id),
+      (id) => !STUB_TABLE_OPS.has(id) && !PLAN_ENGINE_META_OPS.has(id) && !NON_RECEIPT_MUTATION_OPS.has(id),
     );
     for (const operationId of implementedMutatingOps) {
       const vector = mutationVectors[operationId];
@@ -4407,7 +4410,11 @@ describe('document-api adapter conformance', () => {
 
   it('enforces structured non-applied outcomes for every mutating operation', () => {
     const implementedMutatingOps = MUTATING_OPERATION_IDS.filter(
-      (id) => !STUB_TABLE_OPS.has(id) && !PLAN_ENGINE_META_OPS.has(id) && HAS_STRUCTURED_FAILURE_RESULT(id),
+      (id) =>
+        !STUB_TABLE_OPS.has(id) &&
+        !PLAN_ENGINE_META_OPS.has(id) &&
+        !NON_RECEIPT_MUTATION_OPS.has(id) &&
+        HAS_STRUCTURED_FAILURE_RESULT(id),
     );
     for (const operationId of implementedMutatingOps) {
       const vector = mutationVectors[operationId];
@@ -4423,7 +4430,7 @@ describe('document-api adapter conformance', () => {
 
   it('enforces no post-apply throws across every mutating operation', () => {
     const implementedMutatingOps = MUTATING_OPERATION_IDS.filter(
-      (id) => !STUB_TABLE_OPS.has(id) && !PLAN_ENGINE_META_OPS.has(id),
+      (id) => !STUB_TABLE_OPS.has(id) && !PLAN_ENGINE_META_OPS.has(id) && !NON_RECEIPT_MUTATION_OPS.has(id),
     );
     for (const operationId of implementedMutatingOps) {
       const vector = mutationVectors[operationId]!;
