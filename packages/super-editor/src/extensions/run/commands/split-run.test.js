@@ -352,6 +352,46 @@ describe('splitRunToParagraph with style marks', () => {
     expect(paragraphs[1].attrs?.paragraphProperties?.styleId).toBe('Heading1');
   });
 
+  it('does not carry heading-derived style marks when the leading paragraph heading style is cleared', () => {
+    const mockConverter = {
+      convertedXml: {},
+      numbering: {},
+      translatedNumbering: {},
+      translatedLinkedStyles: {
+        docDefaults: { runProperties: {} },
+        styles: {
+          Heading1: {
+            runProperties: {
+              bold: true,
+              fontSize: 28,
+            },
+          },
+        },
+      },
+      documentGuid: 'test-guid-123',
+      promoteToGuid: vi.fn(),
+    };
+
+    editor.converter = mockConverter;
+    loadDoc(STYLED_PARAGRAPH_DOC);
+
+    const start = findTextPos('Heading Text');
+    expect(start).not.toBeNull();
+    updateSelection(start ?? 0);
+
+    const handled = editor.commands.splitRunToParagraph();
+    expect(handled).toBe(true);
+
+    const paragraphs = [];
+    editor.view.state.doc.descendants((node) => {
+      if (node.type.name === 'paragraph') paragraphs.push(node);
+    });
+
+    expect(paragraphs[0].attrs?.paragraphProperties?.styleId).toBeUndefined();
+    const storedMarkTypes = (editor.view.state.storedMarks || []).map((mark) => mark.type?.name);
+    expect(storedMarkTypes).not.toContain('bold');
+  });
+
   it('handles missing converter gracefully during split', () => {
     const mockConverter = {
       convertedXml: {},

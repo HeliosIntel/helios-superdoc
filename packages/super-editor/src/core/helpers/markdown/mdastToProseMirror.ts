@@ -107,8 +107,10 @@ function countBlankLinesBetweenSiblings(previous: MdastNode, next: MdastNode): n
 
   // mdast line numbers are 1-based and inclusive:
   //   previous ends on line A, next starts on line B.
-  // Lines strictly between them are explicit blank lines in the source.
-  return Math.max(0, nextStartLine - previousEndLine - 1);
+  // A single blank line between blocks is the standard Markdown separator,
+  // not an intentional empty paragraph.  Only extra blank lines beyond that
+  // mandatory separator are preserved as empty paragraphs.
+  return Math.max(0, nextStartLine - previousEndLine - 2);
 }
 
 function convertBlockNode(node: MdastNode, ctx: MdastConversionContext): JsonNode[] {

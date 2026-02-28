@@ -52,6 +52,18 @@ function paragraphByText(paragraphs, expectedText) {
 }
 
 describe('markdown to DOCX integration', () => {
+  it('does not create an empty paragraph for a single blank line between root blocks', () => {
+    const markdown = `# Title
+
+Paragraph`;
+
+    const doc = createDocFromMarkdown(markdown, editor);
+    const paragraphs = collectTopLevelParagraphs(doc);
+    const texts = paragraphs.map((node) => node.textContent);
+
+    expect(texts).toEqual(['Title', 'Paragraph']);
+  });
+
   it('retains blank lines between root blocks as empty paragraphs', () => {
     const markdown = `First paragraph.
 
@@ -66,7 +78,7 @@ Third paragraph.`;
     const paragraphs = collectTopLevelParagraphs(doc);
     const texts = paragraphs.map((node) => node.textContent);
 
-    expect(texts).toEqual(['First paragraph.', '', '', 'Second paragraph.', '', '', '', 'Third paragraph.']);
+    expect(texts).toEqual(['First paragraph.', '', 'Second paragraph.', '', '', 'Third paragraph.']);
   });
 
   it('converts complete markdown document with headings and lists', () => {

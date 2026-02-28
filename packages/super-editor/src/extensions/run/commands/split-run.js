@@ -132,6 +132,9 @@ export function splitBlockPatch(state, dispatch, editor) {
       (shouldChangeType || shouldNormalizeAttrs)
     ) {
       tr.setNodeMarkup(first, deflt, normalizedAttrs);
+      if (shouldNormalizeAttrs) {
+        paragraphAttrs = normalizedAttrs;
+      }
     }
   }
 
