@@ -95,10 +95,11 @@ async def insert(text: str = Query(...)) -> dict:
 @app.get("/markdown")
 async def markdown() -> HTMLResponse:
     doc_api = app.state.client.doc
-    if hasattr(doc_api, "get_markdown"):
-        md = await doc_api.get_markdown({})
-    else:
-        md = await doc_api.getMarkdown({})
+    markdown_result = await doc_api.get_markdown()
+    md = markdown_result
+    if not isinstance(md, str):
+        md = str(md)
+
     escaped = md.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     html = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><title>Document Markdown</title>

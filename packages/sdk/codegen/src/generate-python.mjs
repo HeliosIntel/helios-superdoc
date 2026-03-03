@@ -179,6 +179,11 @@ function classNameFor(pathParts, asyncMode) {
   return `${prefix}${pathParts.map((p) => pascalCase(p)).join('')}Api`;
 }
 
+const STRING_ENVELOPE_KEY_BY_OPERATION_ID = {
+  'doc.getText': 'text',
+  'doc.getMarkdown': 'markdown',
+};
+
 function snakeCase(value) {
   return value
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
@@ -199,21 +204,30 @@ function renderClass(treeNode, pathParts, asyncMode, resultTypeMap, paramTypeMap
       const operationId = value.__operation.id;
       const resultType = resultTypeMap.get(operationId) ?? 'dict[str, Any]';
       const paramsType = paramTypeMap.get(operationId) ?? 'dict[str, Any]';
+      const stringEnvelopeKey =
+        resultType === 'str' ? (STRING_ENVELOPE_KEY_BY_OPERATION_ID[operationId] ?? null) : null;
+      const invokeExpression = `${asyncMode ? 'await ' : ''}self._runtime.invoke(${JSON.stringify(operationId)}, params or {}, timeout_ms=timeout_ms, stdin_bytes=stdin_bytes)`;
 
       if (asyncMode) {
         lines.push(
           `    async def ${methodName}(self, params: ${paramsType} | None = None, *, timeout_ms=None, stdin_bytes=None) -> ${resultType}:`,
         );
-        lines.push(
-          `        return await self._runtime.invoke(${JSON.stringify(operationId)}, params or {}, timeout_ms=timeout_ms, stdin_bytes=stdin_bytes)`,
-        );
+        if (stringEnvelopeKey) {
+          lines.push(`        raw = ${invokeExpression}`);
+          lines.push(`        return _unwrap_string_envelope(raw, ${JSON.stringify(stringEnvelopeKey)})`);
+        } else {
+          lines.push(`        return ${invokeExpression}`);
+        }
       } else {
         lines.push(
           `    def ${methodName}(self, params: ${paramsType} | None = None, *, timeout_ms=None, stdin_bytes=None) -> ${resultType}:`,
         );
-        lines.push(
-          `        return self._runtime.invoke(${JSON.stringify(operationId)}, params or {}, timeout_ms=timeout_ms, stdin_bytes=stdin_bytes)`,
-        );
+        if (stringEnvelopeKey) {
+          lines.push(`        raw = ${invokeExpression}`);
+          lines.push(`        return _unwrap_string_envelope(raw, ${JSON.stringify(stringEnvelopeKey)})`);
+        } else {
+          lines.push(`        return ${invokeExpression}`);
+        }
       }
       lines.push('');
 
@@ -286,7 +300,16 @@ function generateClientPy(contract) {
     '',
     'from __future__ import annotations',
     '',
-    'from typing import Any, Literal, TypedDict',
+    'from typing import Any, Literal, TypedDict, cast',
+    '',
+    'def _unwrap_string_envelope(value: Any, key: str) -> str:',
+    '    if isinstance(value, str):',
+    '        return value',
+    '    if isinstance(value, dict):',
+    '        extracted = value.get(key)',
+    '        if isinstance(extracted, str):',
+    '            return extracted',
+    '    return cast(str, value)',
     '',
     sharedTypes,
     '',
