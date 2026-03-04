@@ -350,15 +350,7 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 <Tabs>
   <Tab title="Node.js">
 
-#### Lifecycle
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.open` | `open` | Open a document and create a persistent editing session. Optionally override the document body with contentOverride + overrideType (markdown, html, or text). |
-| `doc.save` | `save` | Save the current session to the original file or a new path. |
-| `doc.close` | `close` | Close the active editing session and clean up resources. |
-
-#### Query
+#### Core
 
 | Operation | CLI command | Description |
 | --- | --- | --- |
@@ -369,17 +361,14 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.getMarkdown` | `get-markdown` | Extract the document content as a Markdown string. |
 | `doc.getHtml` | `get-html` | Extract the document content as an HTML string. |
 | `doc.info` | `info` | Return document metadata including revision, node count, and capabilities. |
-| `doc.query.match` | `query match` | Deterministic selector-based search with cardinality contracts for mutation targeting. |
-| `doc.mutations.preview` | `mutations preview` | Dry-run a mutation plan, returning resolved targets without applying changes. |
-
-#### Mutation
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
 | `doc.insert` | `insert` | Insert content at a target position, or at the end of the document when target is omitted. Supports text (default), markdown, and html content types via the `type` field. |
 | `doc.replace` | `replace` | Replace content at a target position with new text or inline content. |
 | `doc.delete` | `delete` | Delete content at a target position. |
+| `doc.blocks.delete` | `blocks delete` | Delete an entire block node (paragraph, heading, list item, table, image, or sdt) deterministically. |
+| `doc.query.match` | `query match` | Deterministic selector-based search with cardinality contracts for mutation targeting. |
+| `doc.mutations.preview` | `mutations preview` | Dry-run a mutation plan, returning resolved targets without applying changes. |
 | `doc.mutations.apply` | `mutations apply` | Execute a mutation plan atomically against the document. |
+| `doc.capabilities.get` | `capabilities` | Query runtime capabilities supported by the current document engine. |
 
 #### Format
 
@@ -429,11 +418,9 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.format.numSpacing` | `format num-spacing` | Set or clear the `numSpacing` inline run property on the target text range. |
 | `doc.format.stylisticSets` | `format stylistic-sets` | Set or clear the `stylisticSets` inline run property on the target text range. |
 | `doc.format.contextualAlternates` | `format contextual-alternates` | Set or clear the `contextualAlternates` inline run property on the target text range. |
-
-#### Format / Paragraph
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
+| `doc.styles.apply` | `styles apply` | Apply document-level default style changes to the stylesheet (word/styles.xml). Targets docDefaults run and paragraph channels with set-style patch semantics. |
+| `doc.styles.paragraph.setStyle` | `styles paragraph set-style` | Set the paragraph style reference (w:pStyle) on a paragraph-like block. |
+| `doc.styles.paragraph.clearStyle` | `styles paragraph clear-style` | Remove the paragraph style reference from a paragraph-like block. |
 | `doc.format.paragraph.resetDirectFormatting` | `format paragraph reset-direct-formatting` | Strip all direct paragraph formatting while preserving style reference, numbering, and section metadata. |
 | `doc.format.paragraph.setAlignment` | `format paragraph set-alignment` | Set paragraph alignment (justification) on a paragraph-like block. |
 | `doc.format.paragraph.clearAlignment` | `format paragraph clear-alignment` | Remove direct paragraph alignment, reverting to style-defined or default alignment. |
@@ -451,19 +438,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.format.paragraph.clearBorder` | `format paragraph clear-border` | Remove border for a specific side or all sides of a paragraph. |
 | `doc.format.paragraph.setShading` | `format paragraph set-shading` | Set paragraph shading (background fill, pattern color, pattern type). |
 | `doc.format.paragraph.clearShading` | `format paragraph clear-shading` | Remove all paragraph shading. |
-
-#### Styles
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.styles.apply` | `styles apply` | Apply document-level default style changes to the stylesheet (word/styles.xml). Targets docDefaults run and paragraph channels with set-style patch semantics. |
-
-#### Styles / Paragraph
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.styles.paragraph.setStyle` | `styles paragraph set-style` | Set the paragraph style reference (w:pStyle) on a paragraph-like block. |
-| `doc.styles.paragraph.clearStyle` | `styles paragraph clear-style` | Remove the paragraph style reference from a paragraph-like block. |
 
 #### Create
 
@@ -498,12 +472,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.sections.setLinkToPrevious` | `sections set-link-to-previous` | Set or clear link-to-previous behavior for a header/footer variant. |
 | `doc.sections.setPageBorders` | `sections set-page-borders` | Set page border configuration for a section. |
 | `doc.sections.clearPageBorders` | `sections clear-page-borders` | Clear page border configuration for a section. |
-
-#### Blocks
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.blocks.delete` | `blocks delete` | Delete an entire block node (paragraph, heading, list item, table, image, or sdt) deterministically. |
 
 #### Lists
 
@@ -600,55 +568,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.toc.getEntry` | `toc get-entry` | Retrieve details of a specific TC (table of contents entry) field. |
 | `doc.toc.editEntry` | `toc edit-entry` | Update the properties of a TC (table of contents entry) field. |
 
-#### Comments
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.comments.create` | `comments create` | Create a new comment thread (or reply when parentCommentId is given). |
-| `doc.comments.patch` | `comments patch` | Patch fields on an existing comment (text, target, status, or isInternal). |
-| `doc.comments.delete` | `comments delete` | Remove a comment or reply by ID. |
-| `doc.comments.get` | `comments get` | Retrieve a single comment thread by ID. |
-| `doc.comments.list` | `comments list` | List all comment threads in the document. |
-
-#### Track changes
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.trackChanges.list` | `track-changes list` | List all tracked changes in the document. |
-| `doc.trackChanges.get` | `track-changes get` | Retrieve a single tracked change by ID. |
-| `doc.trackChanges.decide` | `track-changes decide` | Accept or reject a tracked change (by ID or scope: all). |
-
-#### Capabilities
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.capabilities.get` | `capabilities` | Query runtime capabilities supported by the current document engine. |
-
-#### History
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.history.get` | `history get` | Query the current undo/redo history state of the active editor. |
-| `doc.history.undo` | `history undo` | Undo the most recent history-safe mutation in the active editor. |
-| `doc.history.redo` | `history redo` | Redo the most recently undone action in the active editor. |
-
-#### Session
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.session.list` | `session list` | List all active editing sessions. |
-| `doc.session.save` | `session save` | Persist the current session state. |
-| `doc.session.close` | `session close` | Close a specific editing session by ID. |
-| `doc.session.setDefault` | `session set-default` | Set the default session for subsequent commands. |
-
-#### Introspection
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.status` | `status` | Show the current session status and document metadata. |
-| `doc.describe` | `describe` | List all available CLI operations and contract metadata. |
-| `doc.describeCommand` | `describe command` | Show detailed metadata for a single CLI operation. |
-
 #### Images
 
 | Operation | CLI command | Description |
@@ -667,18 +586,51 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.images.setAnchorOptions` | `images set-anchor-options` | Set anchor behavior options for a floating image. |
 | `doc.images.setZOrder` | `images set-z-order` | Set the z-order (relativeHeight) for a floating image. |
 
-  </Tab>
-  <Tab title="Python">
+#### Comments
 
-#### Lifecycle
+| Operation | CLI command | Description |
+| --- | --- | --- |
+| `doc.comments.create` | `comments create` | Create a new comment thread (or reply when parentCommentId is given). |
+| `doc.comments.patch` | `comments patch` | Patch fields on an existing comment (text, target, status, or isInternal). |
+| `doc.comments.delete` | `comments delete` | Remove a comment or reply by ID. |
+| `doc.comments.get` | `comments get` | Retrieve a single comment thread by ID. |
+| `doc.comments.list` | `comments list` | List all comment threads in the document. |
+
+#### Track changes
+
+| Operation | CLI command | Description |
+| --- | --- | --- |
+| `doc.trackChanges.list` | `track-changes list` | List all tracked changes in the document. |
+| `doc.trackChanges.get` | `track-changes get` | Retrieve a single tracked change by ID. |
+| `doc.trackChanges.decide` | `track-changes decide` | Accept or reject a tracked change (by ID or scope: all). |
+
+#### History
+
+| Operation | CLI command | Description |
+| --- | --- | --- |
+| `doc.history.get` | `history get` | Query the current undo/redo history state of the active editor. |
+| `doc.history.undo` | `history undo` | Undo the most recent history-safe mutation in the active editor. |
+| `doc.history.redo` | `history redo` | Redo the most recently undone action in the active editor. |
+
+#### Session
 
 | Operation | CLI command | Description |
 | --- | --- | --- |
 | `doc.open` | `open` | Open a document and create a persistent editing session. Optionally override the document body with contentOverride + overrideType (markdown, html, or text). |
 | `doc.save` | `save` | Save the current session to the original file or a new path. |
 | `doc.close` | `close` | Close the active editing session and clean up resources. |
+| `doc.status` | `status` | Show the current session status and document metadata. |
+| `doc.describe` | `describe` | List all available CLI operations and contract metadata. |
+| `doc.describeCommand` | `describe command` | Show detailed metadata for a single CLI operation. |
+| `doc.session.list` | `session list` | List all active editing sessions. |
+| `doc.session.save` | `session save` | Persist the current session state. |
+| `doc.session.close` | `session close` | Close a specific editing session by ID. |
+| `doc.session.setDefault` | `session set-default` | Set the default session for subsequent commands. |
 
-#### Query
+  </Tab>
+  <Tab title="Python">
+
+#### Core
 
 | Operation | CLI command | Description |
 | --- | --- | --- |
@@ -689,17 +641,14 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.get_markdown` | `get-markdown` | Extract the document content as a Markdown string. |
 | `doc.get_html` | `get-html` | Extract the document content as an HTML string. |
 | `doc.info` | `info` | Return document metadata including revision, node count, and capabilities. |
-| `doc.query.match` | `query match` | Deterministic selector-based search with cardinality contracts for mutation targeting. |
-| `doc.mutations.preview` | `mutations preview` | Dry-run a mutation plan, returning resolved targets without applying changes. |
-
-#### Mutation
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
 | `doc.insert` | `insert` | Insert content at a target position, or at the end of the document when target is omitted. Supports text (default), markdown, and html content types via the `type` field. |
 | `doc.replace` | `replace` | Replace content at a target position with new text or inline content. |
 | `doc.delete` | `delete` | Delete content at a target position. |
+| `doc.blocks.delete` | `blocks delete` | Delete an entire block node (paragraph, heading, list item, table, image, or sdt) deterministically. |
+| `doc.query.match` | `query match` | Deterministic selector-based search with cardinality contracts for mutation targeting. |
+| `doc.mutations.preview` | `mutations preview` | Dry-run a mutation plan, returning resolved targets without applying changes. |
 | `doc.mutations.apply` | `mutations apply` | Execute a mutation plan atomically against the document. |
+| `doc.capabilities.get` | `capabilities` | Query runtime capabilities supported by the current document engine. |
 
 #### Format
 
@@ -749,11 +698,9 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.format.num_spacing` | `format num-spacing` | Set or clear the `numSpacing` inline run property on the target text range. |
 | `doc.format.stylistic_sets` | `format stylistic-sets` | Set or clear the `stylisticSets` inline run property on the target text range. |
 | `doc.format.contextual_alternates` | `format contextual-alternates` | Set or clear the `contextualAlternates` inline run property on the target text range. |
-
-#### Format / Paragraph
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
+| `doc.styles.apply` | `styles apply` | Apply document-level default style changes to the stylesheet (word/styles.xml). Targets docDefaults run and paragraph channels with set-style patch semantics. |
+| `doc.styles.paragraph.set_style` | `styles paragraph set-style` | Set the paragraph style reference (w:pStyle) on a paragraph-like block. |
+| `doc.styles.paragraph.clear_style` | `styles paragraph clear-style` | Remove the paragraph style reference from a paragraph-like block. |
 | `doc.format.paragraph.reset_direct_formatting` | `format paragraph reset-direct-formatting` | Strip all direct paragraph formatting while preserving style reference, numbering, and section metadata. |
 | `doc.format.paragraph.set_alignment` | `format paragraph set-alignment` | Set paragraph alignment (justification) on a paragraph-like block. |
 | `doc.format.paragraph.clear_alignment` | `format paragraph clear-alignment` | Remove direct paragraph alignment, reverting to style-defined or default alignment. |
@@ -771,19 +718,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.format.paragraph.clear_border` | `format paragraph clear-border` | Remove border for a specific side or all sides of a paragraph. |
 | `doc.format.paragraph.set_shading` | `format paragraph set-shading` | Set paragraph shading (background fill, pattern color, pattern type). |
 | `doc.format.paragraph.clear_shading` | `format paragraph clear-shading` | Remove all paragraph shading. |
-
-#### Styles
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.styles.apply` | `styles apply` | Apply document-level default style changes to the stylesheet (word/styles.xml). Targets docDefaults run and paragraph channels with set-style patch semantics. |
-
-#### Styles / Paragraph
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.styles.paragraph.set_style` | `styles paragraph set-style` | Set the paragraph style reference (w:pStyle) on a paragraph-like block. |
-| `doc.styles.paragraph.clear_style` | `styles paragraph clear-style` | Remove the paragraph style reference from a paragraph-like block. |
 
 #### Create
 
@@ -818,12 +752,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.sections.set_link_to_previous` | `sections set-link-to-previous` | Set or clear link-to-previous behavior for a header/footer variant. |
 | `doc.sections.set_page_borders` | `sections set-page-borders` | Set page border configuration for a section. |
 | `doc.sections.clear_page_borders` | `sections clear-page-borders` | Clear page border configuration for a section. |
-
-#### Blocks
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.blocks.delete` | `blocks delete` | Delete an entire block node (paragraph, heading, list item, table, image, or sdt) deterministically. |
 
 #### Lists
 
@@ -920,6 +848,24 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.toc.get_entry` | `toc get-entry` | Retrieve details of a specific TC (table of contents entry) field. |
 | `doc.toc.edit_entry` | `toc edit-entry` | Update the properties of a TC (table of contents entry) field. |
 
+#### Images
+
+| Operation | CLI command | Description |
+| --- | --- | --- |
+| `doc.images.list` | `images list` | List all images in the document. |
+| `doc.images.get` | `images get` | Get details for a specific image by its stable ID. |
+| `doc.images.delete` | `images delete` | Delete an image from the document. |
+| `doc.images.move` | `images move` | Move an image to a new location in the document. |
+| `doc.images.convert_to_inline` | `images convert-to-inline` | Convert a floating image to inline placement. |
+| `doc.images.convert_to_floating` | `images convert-to-floating` | Convert an inline image to floating placement. |
+| `doc.images.set_size` | `images set-size` | Set explicit width/height for an image. |
+| `doc.images.set_wrap_type` | `images set-wrap-type` | Set the text wrapping type for a floating image. |
+| `doc.images.set_wrap_side` | `images set-wrap-side` | Set which side(s) text wraps around a floating image. |
+| `doc.images.set_wrap_distances` | `images set-wrap-distances` | Set the text-wrap distance margins for a floating image. |
+| `doc.images.set_position` | `images set-position` | Set the anchor position for a floating image. |
+| `doc.images.set_anchor_options` | `images set-anchor-options` | Set anchor behavior options for a floating image. |
+| `doc.images.set_z_order` | `images set-z-order` | Set the z-order (relativeHeight) for a floating image. |
+
 #### Comments
 
 | Operation | CLI command | Description |
@@ -938,12 +884,6 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 | `doc.track_changes.get` | `track-changes get` | Retrieve a single tracked change by ID. |
 | `doc.track_changes.decide` | `track-changes decide` | Accept or reject a tracked change (by ID or scope: all). |
 
-#### Capabilities
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.capabilities.get` | `capabilities` | Query runtime capabilities supported by the current document engine. |
-
 #### History
 
 | Operation | CLI command | Description |
@@ -956,36 +896,16 @@ The SDKs expose all operations from the [Document API](/document-api/overview) p
 
 | Operation | CLI command | Description |
 | --- | --- | --- |
+| `doc.open` | `open` | Open a document and create a persistent editing session. Optionally override the document body with contentOverride + overrideType (markdown, html, or text). |
+| `doc.save` | `save` | Save the current session to the original file or a new path. |
+| `doc.close` | `close` | Close the active editing session and clean up resources. |
+| `doc.status` | `status` | Show the current session status and document metadata. |
+| `doc.describe` | `describe` | List all available CLI operations and contract metadata. |
+| `doc.describe_command` | `describe command` | Show detailed metadata for a single CLI operation. |
 | `doc.session.list` | `session list` | List all active editing sessions. |
 | `doc.session.save` | `session save` | Persist the current session state. |
 | `doc.session.close` | `session close` | Close a specific editing session by ID. |
 | `doc.session.set_default` | `session set-default` | Set the default session for subsequent commands. |
-
-#### Introspection
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.status` | `status` | Show the current session status and document metadata. |
-| `doc.describe` | `describe` | List all available CLI operations and contract metadata. |
-| `doc.describe_command` | `describe command` | Show detailed metadata for a single CLI operation. |
-
-#### Images
-
-| Operation | CLI command | Description |
-| --- | --- | --- |
-| `doc.images.list` | `images list` | List all images in the document. |
-| `doc.images.get` | `images get` | Get details for a specific image by its stable ID. |
-| `doc.images.delete` | `images delete` | Delete an image from the document. |
-| `doc.images.move` | `images move` | Move an image to a new location in the document. |
-| `doc.images.convert_to_inline` | `images convert-to-inline` | Convert a floating image to inline placement. |
-| `doc.images.convert_to_floating` | `images convert-to-floating` | Convert an inline image to floating placement. |
-| `doc.images.set_size` | `images set-size` | Set explicit width/height for an image. |
-| `doc.images.set_wrap_type` | `images set-wrap-type` | Set the text wrapping type for a floating image. |
-| `doc.images.set_wrap_side` | `images set-wrap-side` | Set which side(s) text wraps around a floating image. |
-| `doc.images.set_wrap_distances` | `images set-wrap-distances` | Set the text-wrap distance margins for a floating image. |
-| `doc.images.set_position` | `images set-position` | Set the anchor position for a floating image. |
-| `doc.images.set_anchor_options` | `images set-anchor-options` | Set anchor behavior options for a floating image. |
-| `doc.images.set_z_order` | `images set-z-order` | Set the z-order (relativeHeight) for a floating image. |
 
   </Tab>
 </Tabs>

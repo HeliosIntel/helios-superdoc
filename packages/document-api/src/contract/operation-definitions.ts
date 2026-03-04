@@ -64,6 +64,9 @@ export interface OperationDefinitionEntry {
   metadata: CommandStaticMetadata;
   referenceDocPath: string;
   referenceGroup: ReferenceGroupKey;
+  skipAsATool?: boolean;
+  /** When true, this tool is included in the default "essential" tool set. */
+  essential?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +207,7 @@ const FORMAT_INLINE_ALIAS_OPERATION_DEFINITIONS: Record<FormatInlineAliasOperati
         }),
         referenceDocPath: `format/${camelToKebab(entry.key)}.mdx`,
         referenceGroup: 'format',
+        skipAsATool: true,
       };
       return [operationId, definition];
     }),
@@ -227,6 +231,7 @@ export const OPERATION_DEFINITIONS = {
     }),
     referenceDocPath: 'find.mdx',
     referenceGroup: 'core',
+    skipAsATool: true,
   },
   getNode: {
     memberPath: 'getNode',
@@ -251,6 +256,7 @@ export const OPERATION_DEFINITIONS = {
     }),
     referenceDocPath: 'get-node-by-id.mdx',
     referenceGroup: 'core',
+    essential: true,
   },
   getText: {
     memberPath: 'getText',
@@ -260,6 +266,7 @@ export const OPERATION_DEFINITIONS = {
     metadata: readOperation(),
     referenceDocPath: 'get-text.mdx',
     referenceGroup: 'core',
+    essential: true,
   },
   getMarkdown: {
     memberPath: 'getMarkdown',
@@ -1574,6 +1581,7 @@ export const OPERATION_DEFINITIONS = {
     }),
     referenceDocPath: 'query/match.mdx',
     referenceGroup: 'query',
+    essential: true,
   },
 
   'mutations.preview': {
@@ -1605,6 +1613,7 @@ export const OPERATION_DEFINITIONS = {
     }),
     referenceDocPath: 'mutations/apply.mdx',
     referenceGroup: 'mutations',
+    essential: true,
   },
 
   'capabilities.get': {
@@ -2499,6 +2508,7 @@ export const OPERATION_DEFINITIONS = {
     }),
     referenceDocPath: 'history/undo.mdx',
     referenceGroup: 'history',
+    essential: true,
   },
 
   'history.redo': {
