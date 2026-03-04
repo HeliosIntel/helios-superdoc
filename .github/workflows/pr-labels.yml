@@ -106,6 +106,8 @@ jobs:
             });
 
             const assoc = pr.author_association;
+            core.info(`DEBUG: author_association=${assoc}, user=${pr.user.login}, type=${pr.user.type}`);
+            core.info(`DEBUG: event author_association=${context.payload.pull_request.author_association}`);
             if (assoc === 'MEMBER' || assoc === 'OWNER' || assoc === 'COLLABORATOR') {
               core.info(`Skipping community label — author is ${assoc}`);
               return;
