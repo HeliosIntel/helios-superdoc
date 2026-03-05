@@ -366,6 +366,52 @@ export function handleImageNode(node, params, isAnchor) {
     }
   }
 
+  // --- Parse pic:nvPicPr for lockAspectRatio, hyperlink ---
+  const nvPicPr = picture.elements.find((el) => el.name === 'pic:nvPicPr');
+  const cNvPicPr = nvPicPr?.elements?.find((el) => el.name === 'pic:cNvPicPr');
+  const picLocks = cNvPicPr?.elements?.find((el) => el.name === 'a:picLocks');
+  // Per OOXML §20.1.2.2.31, noChangeAspect defaults to false when not specified.
+  // When a:picLocks is absent entirely, there is no lock → false.
+  const lockAspectRatio = picLocks
+    ? picLocks.attributes?.['noChangeAspect'] === '1' || picLocks.attributes?.['noChangeAspect'] === 1
+    : false;
+
+  // Parse image hyperlink from pic:cNvPr > a:hlinkClick, falling back to
+  // wp:docPr > a:hlinkClick (Word's canonical placement per §20.4.2.5).
+  const cNvPr = nvPicPr?.elements?.find((el) => el.name === 'pic:cNvPr');
+  const hlinkClick =
+    cNvPr?.elements?.find((el) => el.name === 'a:hlinkClick') ||
+    docPr?.elements?.find((el) => el.name === 'a:hlinkClick');
+  let hyperlink = null;
+  if (hlinkClick?.attributes?.['r:id']) {
+    const hlinkRId = hlinkClick.attributes['r:id'];
+    const currentFile2 = filename || 'document.xml';
+    let hlinkRels = docx[`word/_rels/${currentFile2}.rels`];
+    if (!hlinkRels) hlinkRels = docx[`word/_rels/document.xml.rels`];
+    const hlinkRelationships = hlinkRels?.elements?.find((el) => el.name === 'Relationships');
+    const hlinkRel = hlinkRelationships?.elements?.find((el) => el.attributes?.['Id'] === hlinkRId);
+    if (hlinkRel?.attributes?.['Target']) {
+      hyperlink = { url: hlinkRel.attributes['Target'] };
+      if (hlinkClick.attributes?.['tooltip']) {
+        hyperlink.tooltip = hlinkClick.attributes['tooltip'];
+      }
+    }
+  }
+
+  // --- Parse decorative flag from wp:docPr > a:extLst > a:ext > adec:decorative ---
+  let decorative = false;
+  const docPrExtLst = docPr?.elements?.find((el) => el.name === 'a:extLst');
+  if (docPrExtLst) {
+    for (const ext of docPrExtLst.elements || []) {
+      if (ext.name !== 'a:ext') continue;
+      const decEl = ext.elements?.find((el) => el.name === 'adec:decorative' || el.name === 'a16:decorative');
+      if (decEl && (decEl.attributes?.['val'] === '1' || decEl.attributes?.['val'] === 1)) {
+        decorative = true;
+        break;
+      }
+    }
+  }
+
   const { attributes: blipAttributes = {} } = blip;
   const rEmbed = blipAttributes['r:embed'];
   if (!rEmbed) {
@@ -495,6 +541,9 @@ export function handleImageNode(node, params, isAnchor) {
     },
     originalAttributes: node.attributes,
     rId: relAttributes['Id'],
+    lockAspectRatio,
+    decorative,
+    hyperlink,
     ...(order.length ? { drawingChildOrder: order } : {}),
     ...(originalChildren.length ? { originalDrawingChildren: originalChildren } : {}),
     ...(hasGrayscale ? { grayscale: true } : {}),
