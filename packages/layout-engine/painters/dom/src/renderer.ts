@@ -6594,6 +6594,8 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           textRun.strike ? 1 : 0,
           textRun.highlight ?? '',
           textRun.letterSpacing != null ? textRun.letterSpacing : '',
+          textRun.vertAlign ?? '',
+          textRun.baselineShift != null ? textRun.baselineShift : '',
           // Note: pmStart/pmEnd intentionally excluded to prevent O(n) change detection
           textRun.token ?? '',
           // Tracked changes - force re-render when added or removed tracked change
@@ -6835,6 +6837,8 @@ const deriveBlockVersion = (block: FlowBlock): string => {
               hash = hashString(hash, getRunUnderlineStyle(run));
               hash = hashString(hash, getRunUnderlineColor(run));
               hash = hashString(hash, getRunBooleanProp(run, 'strike') ? '1' : '');
+              hash = hashString(hash, getRunStringProp(run, 'vertAlign'));
+              hash = hashNumber(hash, getRunNumberProp(run, 'baselineShift'));
             }
           }
         }
@@ -6932,6 +6936,17 @@ const applyRunStyles = (element: HTMLElement, run: Run, _isLink = false): void =
   }
   if (decorations.length > 0) {
     element.style.textDecorationLine = decorations.join(' ');
+  }
+
+  // Vertical alignment: custom baseline offset takes precedence over vertAlign
+  if (run.baselineShift != null && Number.isFinite(run.baselineShift)) {
+    element.style.verticalAlign = `${run.baselineShift}pt`;
+  } else if (run.vertAlign === 'superscript') {
+    element.style.verticalAlign = 'super';
+  } else if (run.vertAlign === 'subscript') {
+    element.style.verticalAlign = 'sub';
+  } else if (run.vertAlign === 'baseline') {
+    element.style.verticalAlign = 'baseline';
   }
 };
 
