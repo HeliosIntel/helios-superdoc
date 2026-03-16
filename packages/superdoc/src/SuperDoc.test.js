@@ -897,6 +897,102 @@ describe('SuperDoc.vue', () => {
     expect(presentationEditor.on).toHaveBeenCalledWith('commentPositions', expect.any(Function));
   });
 
+  it('forwards header/footer presentation events through the public update callbacks', async () => {
+    const superdocStub = createSuperdocStub();
+    superdocStub.config.onTransaction = vi.fn();
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    superdocStoreStub.documents.value[0].setPresentationEditor = vi.fn();
+
+    const listeners = {};
+    const presentationEditor = {
+      setContextMenuDisabled: vi.fn(),
+      on: vi.fn((event, handler) => {
+        listeners[event] = handler;
+      }),
+      getCommentBounds: vi.fn(() => ({})),
+    };
+    const bodyEditor = { options: { documentId: 'doc-1' } };
+    const sourceEditor = { options: { documentId: 'header-doc' } };
+
+    wrapper.findComponent(SuperEditorStub).vm.$emit('editor-ready', {
+      editor: bodyEditor,
+      presentationEditor,
+    });
+    await nextTick();
+
+    listeners.headerFooterUpdate({
+      editor: bodyEditor,
+      sourceEditor,
+      surface: 'header',
+      headerId: 'rId-header-default',
+      sectionType: 'default',
+    });
+    expect(superdocStub.emit).toHaveBeenCalledWith('editor-update', {
+      editor: bodyEditor,
+      sourceEditor,
+      surface: 'header',
+      headerId: 'rId-header-default',
+      sectionType: 'default',
+    });
+
+    const transaction = { docChanged: true, getMeta: vi.fn(() => null) };
+    listeners.headerFooterTransaction({
+      editor: bodyEditor,
+      sourceEditor,
+      transaction,
+      duration: 12,
+      surface: 'footer',
+      headerId: 'rId-footer-default',
+      sectionType: 'default',
+    });
+    expect(superdocStub.config.onTransaction).toHaveBeenCalledWith({
+      editor: bodyEditor,
+      sourceEditor,
+      transaction,
+      duration: 12,
+      surface: 'footer',
+      headerId: 'rId-footer-default',
+      sectionType: 'default',
+    });
+  });
+
+  it('falls back to sourceEditor for body update and transaction payloads', async () => {
+    const superdocStub = createSuperdocStub();
+    superdocStub.config.onTransaction = vi.fn();
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const options = wrapper.findComponent(SuperEditorStub).props('options');
+    const bodyEditor = { options: { documentId: 'doc-1' } };
+    const transaction = { docChanged: true, getMeta: vi.fn(() => null) };
+
+    options.onUpdate({ sourceEditor: bodyEditor });
+    expect(superdocStub.emit).toHaveBeenCalledWith('editor-update', {
+      editor: bodyEditor,
+      sourceEditor: bodyEditor,
+      surface: 'body',
+      headerId: null,
+      sectionType: null,
+    });
+
+    options.onTransaction({
+      sourceEditor: bodyEditor,
+      transaction,
+      duration: 7,
+    });
+    expect(superdocStub.config.onTransaction).toHaveBeenCalledWith({
+      editor: bodyEditor,
+      sourceEditor: bodyEditor,
+      transaction,
+      duration: 7,
+      surface: 'body',
+      headerId: null,
+      sectionType: null,
+    });
+  });
+
   it('shows comments sidebar and tools, handles menu actions', async () => {
     const superdocStub = createSuperdocStub();
     const wrapper = await mountComponent(superdocStub);

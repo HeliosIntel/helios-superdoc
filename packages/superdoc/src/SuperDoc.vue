@@ -314,6 +314,14 @@ const onEditorReady = ({ editor, presentationEditor }) => {
     const totalPages = layout.pages.length;
     proxy.$superdoc.emit('pagination-update', { totalPages, superdoc: proxy.$superdoc });
   });
+
+  presentationEditor.on('headerFooterUpdate', (payload = {}) => {
+    proxy.$superdoc.emit('editor-update', buildEditorUpdatePayload(payload));
+  });
+
+  presentationEditor.on('headerFooterTransaction', (payload = {}) => {
+    emitEditorTransaction(buildEditorTransactionPayload(payload));
+  });
 };
 
 const onEditorDestroy = () => {
@@ -328,8 +336,43 @@ const onEditorDocumentLocked = ({ editor, isLocked, lockedBy }) => {
   proxy.$superdoc.lockSuperdoc(isLocked, lockedBy);
 };
 
-const onEditorUpdate = ({ editor }) => {
-  proxy.$superdoc.emit('editor-update', { editor });
+const buildEditorPayloadBase = ({
+  editor,
+  sourceEditor,
+  surface = 'body',
+  headerId = null,
+  sectionType = null,
+} = {}) => {
+  const effectiveEditor = editor ?? sourceEditor;
+  return {
+    editor: effectiveEditor,
+    sourceEditor: sourceEditor ?? effectiveEditor,
+    surface,
+    headerId,
+    sectionType,
+  };
+};
+
+const buildEditorUpdatePayload = (payload = {}) => {
+  return buildEditorPayloadBase(payload);
+};
+
+const onEditorUpdate = (payload = {}) => {
+  proxy.$superdoc.emit('editor-update', buildEditorUpdatePayload(payload));
+};
+
+const buildEditorTransactionPayload = ({ transaction, duration, ...payload } = {}) => {
+  return {
+    ...buildEditorPayloadBase(payload),
+    transaction,
+    duration,
+  };
+};
+
+const emitEditorTransaction = (payload = {}) => {
+  if (typeof proxy.$superdoc.config.onTransaction === 'function') {
+    proxy.$superdoc.config.onTransaction(payload);
+  }
 };
 
 let selectionUpdateRafId = null;
@@ -928,7 +971,8 @@ const onEditorCommentsUpdate = (params = {}) => {
   }
 };
 
-const onEditorTransaction = ({ editor, transaction, duration }) => {
+const onEditorTransaction = (payload = {}) => {
+  const { editor, transaction } = payload;
   const inputType = transaction?.getMeta?.('inputType');
 
   // Call sync on editor transaction but only if it's undo or redo
@@ -938,9 +982,7 @@ const onEditorTransaction = ({ editor, transaction, duration }) => {
     syncTrackedChangePositionsWithDocument({ documentId, editor });
   }
 
-  if (typeof proxy.$superdoc.config.onTransaction === 'function') {
-    proxy.$superdoc.config.onTransaction({ editor, transaction, duration });
-  }
+  emitEditorTransaction(buildEditorTransactionPayload(payload));
 };
 
 const isCommentsEnabled = computed(() => Boolean(commentsModuleConfig.value));
