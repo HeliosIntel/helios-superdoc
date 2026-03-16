@@ -47,7 +47,7 @@ Returns an SDMutationReceipt with applied status; receipt reports NO_OP if the t
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `content` | object | yes |  |
+| `content` | object \\| object[] | yes | One of: object, object[] |
 | `nestingPolicy` | object | no |  |
 | `nestingPolicy.tables` | enum | no | `"forbid"`, `"allow"` |
 | `target` | BlockNodeAddress \\| SelectionTarget | yes | One of: BlockNodeAddress, SelectionTarget |
@@ -56,7 +56,7 @@ Returns an SDMutationReceipt with applied status; receipt reports NO_OP if the t
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `content` | object | yes |  |
+| `content` | object \\| object[] | yes | One of: object, object[] |
 | `nestingPolicy` | object | no |  |
 | `nestingPolicy.tables` | enum | no | `"forbid"`, `"allow"` |
 | `ref` | string | yes |  |
@@ -225,7 +225,17 @@ Returns an SDMutationReceipt with applied status; receipt reports NO_OP if the t
           "additionalProperties": false,
           "properties": {
             "content": {
-              "type": "object"
+              "oneOf": [
+                {
+                  "type": "object"
+                },
+                {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              ]
             },
             "nestingPolicy": {
               "additionalProperties": false,
@@ -260,7 +270,17 @@ Returns an SDMutationReceipt with applied status; receipt reports NO_OP if the t
           "additionalProperties": false,
           "properties": {
             "content": {
-              "type": "object"
+              "oneOf": [
+                {
+                  "type": "object"
+                },
+                {
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              ]
             },
             "nestingPolicy": {
               "additionalProperties": false,
