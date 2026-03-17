@@ -4,12 +4,21 @@ import { getContentTypesFromXml, base64ToUint8Array, detectImageType } from './s
 import { ensureXmlString, isXmlLike } from './encoding-helpers.js';
 import { DOCX } from '@superdoc/common';
 import { COMMENT_FILE_BASENAMES } from './super-converter/constants.js';
+import { syncPackageMetadata } from './opc/sync-package-metadata.js';
 
 /** Image file extensions recognized during import and export. */
 const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'tif', 'emf', 'wmf', 'svg', 'webp']);
 
 /** Map file extensions to correct MIME sub-types where they differ. */
 const MIME_TYPE_FOR_EXT = { tif: 'tiff', jpg: 'jpeg' };
+const CUSTOM_XML_ITEM_PROPS_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.customXmlProperties+xml';
+
+/** OOXML content types for embedded font file extensions. */
+const FONT_CONTENT_TYPES = {
+  odttf: 'application/vnd.openxmlformats-officedocument.obfuscatedFont',
+  ttf: 'application/x-font-ttf',
+  otf: 'application/vnd.ms-opentype',
+};
 
 /**
  * Class to handle unzipping and zipping of docx files
@@ -108,7 +117,7 @@ class DocxZipper {
   /**
    * Update [Content_Types].xml with extensions of new Image annotations
    */
-  async updateContentTypes(docx, media, fromJson, updatedDocs = {}) {
+  async updateContentTypes(docx, media, fromJson, updatedDocs = {}, fonts = {}) {
     const additionalPartNames = Object.keys(updatedDocs || {});
     const newMediaTypes = Object.keys(media)
       .map((name) => this.getFileExtension(name))
@@ -143,6 +152,21 @@ class DocxZipper {
       const newContentType = `<Default Extension="${type}" ContentType="image/${mime}"/>`;
       typesString += newContentType;
       seenTypes.add(type);
+    }
+
+    // Register content types for embedded font extensions
+    if (fonts) {
+      const fontExts = new Set(
+        Object.keys(fonts)
+          .map((name) => this.getFileExtension(name))
+          .filter((ext) => ext && FONT_CONTENT_TYPES[ext]),
+      );
+      for (const ext of fontExts) {
+        if (defaultMediaTypes.includes(ext)) continue;
+        if (seenTypes.has(ext)) continue;
+        typesString += `<Default Extension="${ext}" ContentType="${FONT_CONTENT_TYPES[ext]}"/>`;
+        seenTypes.add(ext);
+      }
     }
 
     // Update for comments and extensionless media overrides.
@@ -225,6 +249,14 @@ class DocxZipper {
     }
 
     partNames.forEach((name) => {
+      if (!/^customXml\/itemProps\d+\.xml$/i.test(name)) return;
+      if (!hasFile(name)) return;
+      const partName = `/${name}`;
+      if (hasPartOverride(partName)) return;
+      typesString += `<Override PartName="${partName}" ContentType="${CUSTOM_XML_ITEM_PROPS_CONTENT_TYPE}" />`;
+    });
+
+    partNames.forEach((name) => {
       if (name.includes('.rels')) return;
       if (!name.includes('header') && !name.includes('footer')) return;
       const hasExtensible = types.elements?.some(
@@ -304,6 +336,47 @@ class DocxZipper {
     docx.file(contentTypesPath, updatedContentTypesXml);
   }
 
+  /**
+   * Run the OPC package metadata synchronizer against a JSZip instance.
+   *
+   * Reads [Content_Types].xml and _rels/.rels from the zip, reconciles
+   * managed package-level parts, and writes the corrected files back.
+   *
+   * The assembled zip is treated as the single source of truth — no stale
+   * updatedDocs are passed, so the synchronizer sees exactly what
+   * updateContentTypes() already wrote.
+   *
+   * @param {JSZip} zip - The fully assembled zip to reconcile.
+   */
+  async #syncPackageMetadataInZip(zip) {
+    // Build a base-files map from the zip's current listing.
+    // At this point the zip already contains all base + updated + media entries.
+    const baseForSync = {};
+    zip.forEach((path) => {
+      baseForSync[path] = ''; // non-null signals "exists"
+    });
+
+    // Read the two metadata files the synchronizer needs to parse.
+    // Use JSZip's async API to correctly handle all internal storage formats.
+    const ctEntry = zip.file('[Content_Types].xml');
+    if (ctEntry) {
+      baseForSync['[Content_Types].xml'] = await ctEntry.async('string');
+    }
+    const rlEntry = zip.file('_rels/.rels');
+    if (rlEntry) {
+      baseForSync['_rels/.rels'] = await rlEntry.async('string');
+    }
+
+    // Pass an empty updatedDocs — the zip is already the assembled truth.
+    const { contentTypesXml, relsXml } = syncPackageMetadata({
+      baseFiles: baseForSync,
+      updatedDocs: {},
+    });
+
+    zip.file('[Content_Types].xml', contentTypesXml);
+    zip.file('_rels/.rels', relsXml);
+  }
+
   async unzip(file) {
     const zip = await this.zip.loadAsync(file);
     return zip;
@@ -314,7 +387,7 @@ class DocxZipper {
     let zip;
 
     if (originalDocxFile) {
-      zip = await this.exportFromOriginalFile(originalDocxFile, updatedDocs, media);
+      zip = await this.exportFromOriginalFile(originalDocxFile, updatedDocs, media, fonts);
     } else {
       zip = await this.exportFromCollaborativeDocx(docx, updatedDocs, media, fonts);
     }
@@ -364,7 +437,11 @@ class DocxZipper {
       zip.file(fontName, fontUintArray);
     }
 
-    await this.updateContentTypes(zip, media, false, updatedDocs);
+    await this.updateContentTypes(zip, media, false, updatedDocs, fonts);
+
+    // Reconcile package-level singleton metadata as a final safety pass.
+    await this.#syncPackageMetadataInZip(zip);
+
     return zip;
   }
 
@@ -375,7 +452,7 @@ class DocxZipper {
    * @param {Object} updatedDocs An object containing the updated docs (keys are relative file names)
    * @returns {Promise<JSZip>} The unzipped but updated docx file ready for zipping
    */
-  async exportFromOriginalFile(originalDocxFile, updatedDocs, media) {
+  async exportFromOriginalFile(originalDocxFile, updatedDocs, media, fonts) {
     const unzippedOriginalDocx = await this.unzip(originalDocxFile);
     const filePromises = [];
     unzippedOriginalDocx.forEach((relativePath, zipEntry) => {
@@ -402,7 +479,17 @@ class DocxZipper {
       unzippedOriginalDocx.file(path, media[path]);
     });
 
-    await this.updateContentTypes(unzippedOriginalDocx, media, false, updatedDocs);
+    // Export caller-supplied font files
+    if (fonts) {
+      for (const [fontName, fontUintArray] of Object.entries(fonts)) {
+        unzippedOriginalDocx.file(fontName, fontUintArray);
+      }
+    }
+
+    await this.updateContentTypes(unzippedOriginalDocx, media, false, updatedDocs, fonts);
+
+    // Reconcile package-level singleton metadata as a final safety pass.
+    await this.#syncPackageMetadataInZip(unzippedOriginalDocx);
 
     return unzippedOriginalDocx;
   }
