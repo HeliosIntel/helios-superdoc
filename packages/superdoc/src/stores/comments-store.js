@@ -55,6 +55,7 @@ export const useCommentsStore = defineStore('comments', () => {
   const skipSelectionUpdate = ref(false);
   const isFloatingCommentsReady = ref(false);
   const generalCommentIds = ref([]);
+  const instantSidebarAlignmentTargetY = ref(null);
 
   const pendingComment = ref(null);
   const isViewingMode = computed(() => viewingVisibility.documentMode === 'viewing');
@@ -560,6 +561,19 @@ export const useCommentsStore = defineStore('comments', () => {
     }
   };
 
+  const requestInstantSidebarAlignment = (targetY = null) => {
+    instantSidebarAlignmentTargetY.value = Number.isFinite(targetY) ? targetY : null;
+  };
+
+  const peekInstantSidebarAlignment = () => {
+    const targetY = instantSidebarAlignmentTargetY.value;
+    return Number.isFinite(targetY) ? targetY : null;
+  };
+
+  const clearInstantSidebarAlignment = () => {
+    instantSidebarAlignmentTargetY.value = null;
+  };
+
   const debounceEmit = (commentId, event, superdoc, delay = 1000) => {
     if (debounceTimers[commentId]) {
       clearTimeout(debounceTimers[commentId]);
@@ -573,7 +587,7 @@ export const useCommentsStore = defineStore('comments', () => {
     }, delay);
   };
 
-  const showAddComment = (superdoc) => {
+  const showAddComment = (superdoc, targetClientY = null) => {
     const event = { type: COMMENT_EVENTS.PENDING };
     superdoc.emit('comments-update', event);
 
@@ -599,6 +613,7 @@ export const useCommentsStore = defineStore('comments', () => {
       superdocStore.selectionPosition.source = 'super-editor';
     }
 
+    requestInstantSidebarAlignment(targetClientY);
     activeComment.value = pendingComment.value.commentId;
   };
 
@@ -1342,7 +1357,6 @@ export const useCommentsStore = defineStore('comments', () => {
     visibleConversations,
     skipSelectionUpdate,
     isFloatingCommentsReady,
-
     // Getters
     getConfig,
     documentsWithConverations,
@@ -1377,6 +1391,9 @@ export const useCommentsStore = defineStore('comments', () => {
     clearEditorCommentPositions,
     handleTrackedChangeUpdate,
     syncTrackedChangePositionsWithDocument,
+    requestInstantSidebarAlignment,
+    peekInstantSidebarAlignment,
+    clearInstantSidebarAlignment,
     syncTrackedChangeComments,
   };
 });

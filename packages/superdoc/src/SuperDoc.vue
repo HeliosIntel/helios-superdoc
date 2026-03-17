@@ -218,9 +218,20 @@ const handleDocumentReady = (documentId, container) => {
   proxy.$superdoc.broadcastPdfDocumentReady();
 };
 
+const getPendingCommentTargetClientY = () => {
+  if (!selectionPosition.value || !layers.value) return null;
+
+  const isPdf = selectionPosition.value.source === 'pdf';
+  const zoom = isPdf ? (activeZoom.value ?? 100) / 100 : 1;
+  const top = Number(selectionPosition.value.top);
+  if (!Number.isFinite(top)) return null;
+
+  return layers.value.getBoundingClientRect().top + top * zoom;
+};
+
 const handleToolClick = (tool) => {
   const toolOptions = {
-    comments: () => showAddComment(proxy.$superdoc),
+    comments: () => showAddComment(proxy.$superdoc, getPendingCommentTargetClientY()),
     ai: () => handleAiToolClick(),
   };
 
@@ -1451,11 +1462,15 @@ const getPDFViewer = () => {
 
 .right-sidebar {
   min-width: 320px;
+  height: 100%;
 }
 
 .floating-comments {
   min-width: 300px;
   width: 300px;
+  height: 100%;
+  overflow-y: hidden;
+  overflow-x: hidden;
 }
 
 .superdoc__layers {
