@@ -1266,12 +1266,32 @@ const handlePdfSelectionRaw = ({ selectionBounds, documentId, page }) => {
 watch(
   () => activeZoom.value,
   (zoom) => {
+    const zoomFactor = (zoom ?? 100) / 100;
+
     if (proxy.$superdoc.config.useLayoutEngine !== false) {
-      PresentationEditor.setGlobalZoom((zoom ?? 100) / 100);
+      PresentationEditor.setGlobalZoom(zoomFactor);
+    } else {
+      // Web layout without layout engine — apply CSS transform directly
+      // to non-PDF sub-document containers so zoom works for PM fallback rendering.
+      // PDF documents are excluded because pdfViewer.updateScale() handles their zoom
+      // separately below; applying both would result in double-zoom.
+      const subDocs = layers.value?.querySelectorAll('.superdoc__sub-document');
+      subDocs?.forEach((el) => {
+        if (el.querySelector('.sd-pdf-viewer')) return;
+        if (zoomFactor === 1) {
+          el.style.transformOrigin = '';
+          el.style.transform = '';
+          el.style.width = '';
+        } else {
+          el.style.transformOrigin = 'top left';
+          el.style.transform = `scale(${zoomFactor})`;
+          el.style.width = `${100 / zoomFactor}%`;
+        }
+      });
     }
 
     const pdfViewer = getPDFViewer();
-    pdfViewer?.updateScale((zoom ?? 100) / 100);
+    pdfViewer?.updateScale(zoomFactor);
 
     nextTick(() => {
       updateWhiteboardPageSizes();
