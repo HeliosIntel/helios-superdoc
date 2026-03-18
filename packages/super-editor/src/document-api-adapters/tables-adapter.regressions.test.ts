@@ -7,6 +7,7 @@ import {
   tablesClearShadingAdapter,
   tablesDeleteCellAdapter,
   tablesDistributeColumnsAdapter,
+  tablesInsertColumnAdapter,
   tablesInsertCellAdapter,
   tablesSetBorderAdapter,
   tablesSetShadingAdapter,
@@ -42,7 +43,10 @@ type NodeOptions = {
 type TableEditorOptions = {
   firstRowAsHeaders?: boolean;
   firstRowBorders?: Record<string, unknown> | null;
+  lastColumnAsHeaders?: boolean;
 };
+
+const mockSchema: { nodes: Record<string, unknown> } = { nodes: {} };
 
 function createNode(typeName: string, children: ProseMirrorNode[] = [], options: NodeOptions = {}): ProseMirrorNode {
   const attrs = options.attrs ?? {};
@@ -59,6 +63,7 @@ function createNode(typeName: string, children: ProseMirrorNode[] = [], options:
   const node = {
     type: {
       name: typeName,
+      schema: mockSchema,
       create(newAttrs: Record<string, unknown>) {
         return createNode(typeName, [], { attrs: newAttrs, isBlock, inlineContent });
       },
@@ -125,12 +130,17 @@ function createNode(typeName: string, children: ProseMirrorNode[] = [], options:
     },
   };
 
+  mockSchema.nodes[typeName] = node.type;
+
   return node as unknown as ProseMirrorNode;
 }
 
 function makeTableEditor(options: TableEditorOptions = {}): Editor {
   const firstRowAsHeaders = options.firstRowAsHeaders ?? false;
+  const lastColumnAsHeaders = options.lastColumnAsHeaders ?? false;
   const firstRowType = firstRowAsHeaders ? 'tableHeader' : 'tableCell';
+  const secondColumnType = lastColumnAsHeaders ? 'tableHeader' : firstRowType;
+  const lastCellType = lastColumnAsHeaders ? 'tableHeader' : 'tableCell';
   const firstRowAttrs =
     options.firstRowBorders === undefined
       ? {}
@@ -163,7 +173,7 @@ function makeTableEditor(options: TableEditorOptions = {}): Editor {
     isBlock: true,
     inlineContent: false,
   });
-  const cell2 = createNode(firstRowType, [paragraph2], {
+  const cell2 = createNode(secondColumnType, [paragraph2], {
     attrs: { sdBlockId: 'cell-2', colspan: 1, rowspan: 1, colwidth: [200], ...firstRowAttrs },
     isBlock: true,
     inlineContent: false,
@@ -173,7 +183,7 @@ function makeTableEditor(options: TableEditorOptions = {}): Editor {
     isBlock: true,
     inlineContent: false,
   });
-  const cell4 = createNode('tableCell', [paragraph4], {
+  const cell4 = createNode(lastCellType, [paragraph4], {
     attrs: { sdBlockId: 'cell-4', colspan: 1, rowspan: 1, colwidth: [200] },
     isBlock: true,
     inlineContent: false,
@@ -381,6 +391,37 @@ describe('tables-adapter regressions', () => {
     expect(insertedSeparator.type.name).toBe('paragraph');
     expect(secondInsertCall[0]).toBe(expectedInsertPos + insertedSeparator.nodeSize);
     expect(insertedTable.type.name).toBe('table');
+  });
+
+  it('SD-2127: inserts a new cell in every row when appending a column to the right of the last column', () => {
+    const editor = makeTableEditor();
+    const tr = editor.state.tr as unknown as { insert: ReturnType<typeof vi.fn> };
+
+    const result = tablesInsertColumnAdapter(
+      editor,
+      { tableNodeId: 'table-1', columnIndex: 1, position: 'right' },
+      { changeMode: 'direct' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(tr.insert).toHaveBeenCalledTimes(2);
+  });
+
+  it('SD-2127: appending right of a header edge inserts body cells, not cloned header cells', () => {
+    const editor = makeTableEditor({ lastColumnAsHeaders: true });
+    const tr = editor.state.tr as unknown as { insert: ReturnType<typeof vi.fn> };
+
+    const result = tablesInsertColumnAdapter(
+      editor,
+      { tableNodeId: 'table-1', columnIndex: 1, position: 'right' },
+      { changeMode: 'direct' },
+    );
+
+    expect(result.success).toBe(true);
+    expect(tr.insert).toHaveBeenCalledTimes(2);
+
+    const insertedTypeNames = tr.insert.mock.calls.map(([, node]) => (node as ProseMirrorNode).type.name);
+    expect(insertedTypeNames).toEqual(['tableCell', 'tableCell']);
   });
 
   it('deletes shiftLeft cells without appending a trailing replacement cell', () => {
