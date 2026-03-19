@@ -471,7 +471,10 @@ export interface TablesGetCellsInput extends TableLocator {
 
 /** Per-cell info with stable ref for write handoff. */
 export interface TableCellInfo {
+  /** Shorthand cell identifier — convenient for logging, Map keys, and display. */
   nodeId: string;
+  /** Mutation-ready address — pass directly as `target` in follow-up cell operations. */
+  address: TableCellAddress;
   rowIndex: number;
   columnIndex: number;
   colspan: number;
